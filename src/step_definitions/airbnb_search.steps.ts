@@ -1,9 +1,9 @@
 // src/step_definitions/airbnb_search.steps.ts
 
-import { Builder, By, until, WebDriver } from 'selenium-webdriver';
-import { Given, When, Then, BeforeAll, AfterAll } from '@cucumber/cucumber';
-import { expect } from 'chai';
-import { HomePage } from '../pages/homePage';
+import {Builder, By, until, WebDriver} from 'selenium-webdriver';
+import {Given, When, Then, BeforeAll, AfterAll} from '@cucumber/cucumber';
+import {expect} from 'chai';
+import {HomePage} from '../pages/homePage';
 
 let driver: WebDriver;
 let homePage: HomePage;
@@ -17,7 +17,7 @@ BeforeAll(async () => {
     await driver.manage().window().maximize();
 
     // Set timeouts
-    await driver.manage().setTimeouts({ pageLoad: 60000 });
+    await driver.manage().setTimeouts({pageLoad: 60000});
 
     homePage = new HomePage(driver);
 });
@@ -29,7 +29,7 @@ AfterAll(async () => {
     }
 });
 
-Given('I open Airbnb homepage', async () => {
+Given('I open Airbnb homepage', {timeout: 10000}, async () => {
     await driver.get('https://www.airbnb.com/');
 
     console.log('Current URL:', await driver.getCurrentUrl());
@@ -37,8 +37,6 @@ Given('I open Airbnb homepage', async () => {
 
     // Add a short delay to ensure the page has loaded
     await driver.sleep(2000); // Wait for 2 seconds
-
-    // driver.manage().window().maximize();
 
     // Now locate and wait for the location input field
     const locationInputLocator = By.css('input[data-testid="structured-search-input-field-query"]');
@@ -49,40 +47,40 @@ Given('I open Airbnb homepage', async () => {
     console.log('Page Title:', await driver.getTitle());
 });
 
-When( 'I search for properties in {string} with the following details:', { timeout: 60 * 1000 }, async function (location: string, dataTable) {
-        const dataRows = dataTable.hashes();
-        const data = dataRows[0];
+When('I search for properties in {string} with the following details:', {timeout: 60 * 1000}, async function (location: string, dataTable) {
+    const dataRows = dataTable.hashes();
+    const data = dataRows[0];
 
-        console.log('Location:', location);
-        console.log('Check-In:', data['Check-In']);
-        console.log('Check-Out:', data['Check-Out']);
-        console.log('Adults:', data['Adults']);
-        console.log('Children:', data['Children']);
+    console.log('Location:', location);
+    console.log('Check-In:', data['Check-In']);
+    console.log('Check-Out:', data['Check-Out']);
+    console.log('Adults:', data['Adults']);
+    console.log('Children:', data['Children']);
 
-        // Enter the location
-        await homePage.enterLocation(location);
+    // Enter the location
+    await homePage.enterLocation(location);
 
-        // Parse days ahead
-        const checkInDays = data['Check-In'] === 'one week ahead' ? 7 : 0;
-        const checkOutDays = data['Check-Out'] === 'two weeks ahead' ? 14 : 0;
+    // Parse days ahead
+    const checkInDays = data['Check-In'] === 'one week ahead' ? 7 : 0;
+    const checkOutDays = data['Check-Out'] === 'two weeks ahead' ? 14 : 0;
 
-        // Select dates
-        await homePage.selectDates(checkInDays, checkOutDays);
+    // Select dates
+    await homePage.selectDates(checkInDays, checkOutDays);
 
-        // Parse guests
-        const adults = parseInt(data['Adults'], 10);
-        const children = parseInt(data['Children'], 10);
+    // Parse guests
+    const adults = parseInt(data['Adults'], 10);
+    const children = parseInt(data['Children'], 10);
 
-        // Select guests
-        await homePage.selectGuests(adults, children);
+    // Select guests
+    await homePage.selectGuests(adults, children);
 
-        // Click search
-        await homePage.clickSearch();
+    // Click search
+    await homePage.clickSearch();
     }
 );
 
 Then('I should see the correct search filters applied', async function () {
-    console.log("111111");
+
     // Wait for the search results page to load
     await driver.wait(until.urlContains('/s/'), 20000);
 
@@ -115,9 +113,9 @@ Then('I should see the correct search filters applied', async function () {
     checkOutDate.setDate(checkOutDate.getDate() + 14);
 });
 
-Then('I should see properties accommodating at least {int} guests',  { timeout: 120000 }, async function (minGuests: number) {
+Then('I should see properties accommodating at least {int} guests', {timeout: 120000}, async function (minGuests: number) {
     // Wait for at least 2 property cards to load
-    await driver.wait(async function() {
+    await driver.wait(async function () {
         const elements = await driver.findElements(By.css('[data-testid="card-container"]'));
         return elements.length >= 2;  // Adjust if needed
     }, 20000);
@@ -241,7 +239,7 @@ Then('I should see properties accommodating at least {int} guests',  { timeout: 
     }
 });
 
-When('I apply additional filters:',  { timeout: 120000 }, async function (dataTable) {
+When('I apply additional filters:', {timeout: 120000}, async function (dataTable) {
     const data = dataTable.rowsHash();
     console.log('Applying additional filters:', data);
 
@@ -264,7 +262,7 @@ When('I apply additional filters:',  { timeout: 120000 }, async function (dataTa
     await homePage.clickShowStays();
 });
 
-Then('I should see properties with at least {int} bedrooms and a pool',  { timeout: 120000 }, async function (minBedrooms: number) {
+Then('I should see properties with at least {int} bedrooms and a pool', {timeout: 120000}, async function (minBedrooms: number) {
     // Wait for the property cards to load
     await driver.wait(until.elementsLocated(By.css('div[itemprop="itemListElement"]')), 20000);
 
@@ -353,9 +351,9 @@ Then('I should see properties with at least {int} bedrooms and a pool',  { timeo
     }
 });
 
-Then('all results on the first page have at least {int} bedrooms', { timeout: 120000 }, async function (minBedrooms: number) {
+Then('all results on the first page have at least {int} bedrooms', {timeout: 120000}, async function (minBedrooms: number) {
     console.log(`\nVerifying that all properties on the first page have at least ${minBedrooms} bedrooms...`);
-    await driver.wait(async function() {
+    await driver.wait(async function () {
         const elements = await driver.findElements(By.css('[data-testid="card-container"]'));
         return elements.length >= 2;  // Wait until at least 2 elements are located
     }, 20000);  // Wait for up to 20 seconds
@@ -515,9 +513,9 @@ Then('all results on the first page have at least {int} bedrooms', { timeout: 12
     console.log(`\nAll properties on the first page have at least ${minBedrooms} bedrooms.`);
 });
 
-Then(/^first result has pool amenity$/, { timeout: 120000 }, async function () {
+Then(/^first result has pool amenity$/, {timeout: 120000}, async function () {
     console.log(`\nVerifying that the first property on the page has pool amenity...`);
-    await driver.wait(async function() {
+    await driver.wait(async function () {
         const elements = await driver.findElements(By.css('[data-testid="card-container"]'));
         return elements.length >= 2;  // Wait until at least 2 elements are located
     }, 20000);  // Wait for up to 20 seconds
@@ -671,9 +669,13 @@ When('I hover over the first property from the search results page', async funct
     propertyPrice = propertyPrice.replace(/\s/g, '').replace(/&nbsp;/g, '').trim();
     console.log('Normalized propertyPrice:', propertyPrice);
 
+    // Save the extracted details to `this`
+    this.propertyTitle = propertyTitle;
+    this.propertyPrice = propertyPrice;
+
     // Log for debugging
-    console.log('Extracted title:', propertyTitle);
-    console.log('Extracted price:', propertyPrice);
+    console.log('Extracted title:', this.propertyTitle);
+    console.log('Extracted price:', this.propertyPrice);
 
     // Step 2: Find the map pin with the same price
     const mapPins = await driver.findElements(By.css('button[data-testid="map/markers/BasePillMarker"]'));
@@ -705,6 +707,7 @@ When('I hover over the first property from the search results page', async funct
 
     // Step 3: Assert that a matching map pin was found
     if (matchingPin) {
+        this.matchingPin = matchingPin;
         console.log('Found the matching map pin with price:', propertyPrice);
 
         // Step 4: Target the correct inner div within the pin
@@ -720,7 +723,7 @@ When('I hover over the first property from the search results page', async funct
         console.log('Background color before hover:', backgroundColorBeforeHover);
 
         // Hover over the property card (this should change the pin's color)
-        await driver.actions().move({ origin: propertyCard }).perform();
+        await driver.actions().move({origin: propertyCard}).perform();
 
         // Wait for the hover effect to take place
         await driver.sleep(500); // Allow 500ms for transition effects to complete
@@ -742,50 +745,7 @@ When('I hover over the first property from the search results page', async funct
     }
 });
 
-Then('property is displayed on the map and the color of the pin changes', { timeout: 10000 }, async function () {
-    const mapLocator = By.css('div[data-testid="map"]');
-    await driver.wait(until.elementLocated(mapLocator), 20000); // Wait for the map to be visible
-
-    const mapPinLocator = By.css('div[data-testid="map-pin"]');
-    const mapPin = await driver.wait(until.elementLocated(mapPinLocator), 10000); // Wait for the pin
-
-    const originalColor = await mapPin.getCssValue('background-color');
-    console.log(`Original pin color: ${originalColor}`);
-
-    // Assuming some hover or interaction changes the pin color
-    await driver.actions().move({origin: mapPin}).perform();
-    const changedColor = await mapPin.getCssValue('background-color');
-    console.log(`Pin color after hover: ${changedColor}`);
-
-    expect(changedColor).to.not.equal(originalColor, 'Pin color did not change on hover.');
-});
-
-When('I click the property on the map', async function () {
-    const mapPinLocator = By.css('div[data-testid="map-pin"]');
-    const mapPin = await driver.findElement(mapPinLocator);
-
-    await mapPin.click();
-    console.log('Clicked on the property pin on the map.');
-});
-
-Then('the details shown on the map popup should be the same as the ones from the search results', async function () {
-    // Retrieve the search results details
-    const propertyTitleLocator = By.css('[data-testid="listing-title"]');
-    const searchResultsTitle = await driver.findElement(propertyTitleLocator).getText();
-
-    console.log('Search results property title:', searchResultsTitle);
-
-    // Get the map popup title
-    const popupTitleLocator = By.css('[data-testid="map-popup-title"]');
-    const popupTitle = await driver.findElement(popupTitleLocator).getText();
-
-    console.log('Map popup property title:', popupTitle);
-
-    // Compare the titles
-    expect(popupTitle).to.equal(searchResultsTitle, 'The details in the map popup do not match the search results.');
-});
-
-When('I clear additional filters', { timeout: 120000 }, async function () {
+When('I clear additional filters', {timeout: 120000}, async function () {
     console.log('Clearing additional filters...');
 
     // Open the filters modal
@@ -799,6 +759,43 @@ When('I clear additional filters', { timeout: 120000 }, async function () {
 
     console.log('Filters cleared.');
 });
+
+Then('I click the property on the map and verify the details', async function () {
+    if (this.matchingPin) {
+        console.log('Clicking on the matching pin...');
+        await this.matchingPin.click();
+        console.log('Pin clicked.');
+
+        // Wait for the property card (popup) to appear on the map
+        const mapPopupLocator = By.css('[data-testid="card-container"]');
+        await driver.wait(until.elementLocated(mapPopupLocator), 10000);
+        const mapPopup = await driver.findElement(mapPopupLocator);
+        console.log('Property popup is visible.');
+
+        // Extract the title from the popup
+        const popupTitleLocator = By.css('[data-testid="listing-card-title"]');
+        const popupTitle = await mapPopup.findElement(popupTitleLocator).getText();
+        console.log('Popup title:', popupTitle);
+
+        // Extract the price from the popup
+        const popupPriceLocator = By.xpath('//div[@data-testid="price-availability-row"]/div[2]//span[2]');
+        let popupPrice = await mapPopup.findElement(popupPriceLocator).getText();
+        popupPrice = popupPrice.replace(/\s/g, '').replace(/&nbsp;/g, '').trim();  // Normalize the price
+        console.log('Popup price:', popupPrice);
+
+        // Compare the popup details with the saved property details
+        expect(popupTitle).to.equal(this.propertyTitle, 'Popup title does not match the property title from search results.');
+        expect(popupPrice).to.equal(this.propertyPrice, 'Popup price does not match the property price from search results.');
+
+        console.log('Verified that the popup details match the search result.');
+    } else {
+        throw new Error('No matching map pin was found to click.');
+    }
+});
+
+
+
+
 
 
 
