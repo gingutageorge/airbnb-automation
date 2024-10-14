@@ -1,0 +1,25 @@
+{
+  "name": "airbnb-automation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "cucumber-js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@cucumber/cucumber": "^11.0.1",
+    "@types/chai": "^5.0.0",
+    "selenium-webdriver": "^4.25.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.0.0",
+    "@types/node": "^22.7.5",
+    "@types/selenium-webdriver": "^4.1.26",
+    "chai": "^4.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}

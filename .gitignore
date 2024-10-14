@@ -1,0 +1,67 @@
+# Ignore node_modules directory 
+node_modules/
+
+# Ignore output of reports, logs, or screenshots
+allure-results/
+allure-report/
+test-output/
+reports/
+logs/
+screenshots/
+
+# Ignore IDE specific files
+.vscode/
+.idea/
+*.iml
+
+# Ignore environment specific files
+*.env
+.env.local
+.env.test
+.env.production
+
+# Ignore OS-specific files
+.DS_Store  # macOS
+Thumbs.db  # Windows
+
+# Ignore npm or yarn lock files if not needed
+package-lock.json
+yarn.lock
+
+# Ignore build tools output
+build/
+target/
+dist/
+
+# Ignore compiled TypeScript files (if using TypeScript)
+*.tsbuildinfo
+
+# Ignore Docker-specific files
+docker-compose.override.yml
+docker-compose.yml
+*.log
+
+# Ignore Java-specific files (if you're using Selenium with Java)
+*.class
+*.jar
+bin/
+target/
+
+# Ignore Python-specific files (if using Python with Selenium)
+*.pyc
+__pycache__/
+venv/
+.env/
+
+# Ignore Eclipse project files
+.project
+.classpath
+
+# Ignore IntelliJ IDEA project files
+*.iml
+.idea/
+
+# Ignore WebDriver binaries
+chromedriver
+geckodriver
+msedgedriver
