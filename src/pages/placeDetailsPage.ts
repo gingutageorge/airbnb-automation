@@ -1,17 +1,21 @@
-import { BasePage } from './basePage';
+import {BasePage} from './basePage';
 import {By, WebDriver, until, Key, WebElement} from 'selenium-webdriver';
 
 export class PlaceDetailsPage extends BasePage {
+    static TRANSLATION_MODAL_SELECTOR = By.css('[role="dialog"][aria-label="Translation on"]');
+    static CLOSE_BUTTON_SELECTOR = By.css('button[aria-label="Close"]');
     constructor(driver: WebDriver) {
         super(driver);
     }
 
     async closeTranslationOverlayIfNeeded() {
         try {
-            const modal = await this.driver.wait(until.elementLocated(By.css('[role="dialog"][aria-label="Translation on"]')), 5000);
+            // const modal = await this.driver.wait(until.elementLocated(By.css('[role="dialog"][aria-label="Translation on"]')), 5000);
+            const modal = await this.driver.wait(until.elementLocated(PlaceDetailsPage.TRANSLATION_MODAL_SELECTOR), 5000);
             if (modal) {
                 console.log("Translation modal is displayed. Attempting to close it...");
-                const closeButton = await modal.findElement(By.css('button[aria-label="Close"]'));
+                // const closeButton = await modal.findElement(By.css('button[aria-label="Close"]'));
+                const closeButton = await modal.findElement(PlaceDetailsPage.CLOSE_BUTTON_SELECTOR);
                 await closeButton.click();
 
                 console.log("Translation modal closed successfully.");
@@ -67,14 +71,6 @@ export class PlaceDetailsPage extends BasePage {
     parseMaxBedrooms(bedroomText: string) {
         const bedroomsMatch = bedroomText.match(/(\d+)\s+bedrooms?/i);
         return bedroomsMatch ? parseInt(bedroomsMatch[1], 10) : null;
-    }
-
-    verifyMinBedrooms(maxBedrooms: number, minBedrooms: number) {
-        if (maxBedrooms >= minBedrooms) {
-            console.log(`Property meets the requirement of at least ${minBedrooms} bedrooms.`);
-        } else {
-            throw new Error(`Property does not meet the minimum bedroom requirement of ${minBedrooms}`);
-        }
     }
 
     async extractBedroomsFromDetailsPage(card: WebElement, originalWindow: string) {

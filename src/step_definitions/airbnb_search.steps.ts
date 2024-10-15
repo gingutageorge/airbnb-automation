@@ -41,13 +41,6 @@ Given('I open Airbnb homepage', {timeout: 10000}, async () => {
     // Add a short delay to ensure the page has loaded
     await driver.sleep(2000); // Wait for 2 seconds
 
-    // Now locate and wait for the location input field
-    const locationInputLocator = By.css('input[data-testid="structured-search-input-field-query"]');
-    const locationInput = await driver.wait(until.elementLocated(locationInputLocator), 20000);
-    await driver.wait(until.elementIsVisible(locationInput), 20000);
-
-    console.log('Current URL:', await driver.getCurrentUrl());
-    console.log('Page Title:', await driver.getTitle());
 });
 
 When('I search for properties in {string} with the following details:', {timeout: 60 * 1000}, async function (location: string, dataTable) {
@@ -60,6 +53,12 @@ When('I search for properties in {string} with the following details:', {timeout
         console.log('Adults:', data['Adults']);
         console.log('Children:', data['Children']);
 
+    this.context = {
+        adults: parseInt(data['Adults'], 10),
+        children: parseInt(data['Children'], 10),
+        totalGuests: parseInt(data['Adults'], 10) + parseInt(data['Children'], 10),
+    };
+
         // Enter the location
         await homePage.enterLocation(location);
 
@@ -71,8 +70,11 @@ When('I search for properties in {string} with the following details:', {timeout
         await homePage.selectDates(checkInDays, checkOutDays);
 
         // Parse guests
-        const adults = parseInt(data['Adults'], 10);
-        const children = parseInt(data['Children'], 10);
+        // const adults = parseInt(data['Adults'], 10);
+        const adults = this.context.adults;
+        const children = this.context.children;
+        // const children = parseInt(data['Children'], 10)
+        ;
 
         // Select guests
         await homePage.selectGuests(adults, children);
@@ -116,7 +118,9 @@ Then('I should see the correct search filters applied', async function () {
     checkOutDate.setDate(checkOutDate.getDate() + 14);
 });
 
-Then('I should see properties accommodating at least {int} guests', {timeout: 130000}, async function (minGuests: number) {
+Then('I should see properties accommodating at least the total number of guests', {timeout: 130000}, async function () {
+    const totalGuests = this.context.totalGuests;
+
     // Wait for at least 2 property cards to load
     await driver.wait(async function () {
         const elements = await driver.findElements(By.css('[data-testid="card-container"]'));
@@ -148,7 +152,7 @@ Then('I should see properties accommodating at least {int} guests', {timeout: 13
             const maxGuests = placeDetailsPage.parseMaxGuests(capacityText);
 
             if (maxGuests !== null) {
-                placeDetailsPage.verifyMinGuests(maxGuests, minGuests);
+                placeDetailsPage.verifyMinGuests(maxGuests, totalGuests); // Compare with totalGuests from context
             } else {
                 console.log('Unable to determine guest capacity for this property.');
             }

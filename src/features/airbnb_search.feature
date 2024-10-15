@@ -7,7 +7,7 @@ Feature: Airbnb Search
       | Check-In       | Check-Out        | Adults | Children |
       | one week ahead | two weeks ahead  | 2      | 1        |
     Then I should see the correct search filters applied
-    Then I should see properties accommodating at least 3 guests
+    Then I should see properties accommodating at least the total number of guests
     And I apply additional filters:
       | Bedrooms | 5  |
       | Amenities | Pool |
