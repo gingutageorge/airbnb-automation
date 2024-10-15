@@ -1,7 +1,10 @@
+import { BasePage } from './basePage';
 import {By, WebDriver, until, Key, WebElement} from 'selenium-webdriver';
 
-export class HomePage {
-    constructor(private driver: WebDriver) {}
+export class HomePage extends BasePage {
+    constructor(driver: WebDriver) {
+        super(driver);
+    }
 
     async enterLocation(location: string) {
         // Locate the location input field using data-testid
@@ -20,6 +23,53 @@ export class HomePage {
 
         await locationInput.sendKeys(Key.RETURN);
         console.log('Pressed Enter after entering the location.');
+
+        // Wait for the suggestions panel to appear
+        // console.log('Waiting for the suggestions panel to appear...');
+        // const suggestionsPanelLocator = By.css('div[data-testid="bigsearch-query-location-listbox"]');
+        // await this.driver.wait(until.elementLocated(suggestionsPanelLocator), 10000);
+        // const suggestionsPanel = await this.driver.findElement(suggestionsPanelLocator);
+        // await this.driver.wait(until.elementIsVisible(suggestionsPanel), 10000);
+        // console.log('Suggestions panel is visible.');
+        //
+        // // Wait for suggestions to populate
+        // await this.driver.wait(async () => {
+        //     const suggestions = await suggestionsPanel.findElements(By.css('div[role="option"]'));
+        //     return suggestions.length > 0;
+        // }, 10000);
+        // console.log('Suggestions have populated.');
+        //
+        // // Get all suggestions
+        // const suggestionOptions = await suggestionsPanel.findElements(By.css('div[role="option"]'));
+        // console.log(`Found ${suggestionOptions.length} suggestion options.`);
+        //
+        // // Normalize the location string for comparison
+        // const normalizedLocation = location.trim().toLowerCase();
+        //
+        // // Find the suggestion that matches the location
+        // let found = false;
+        // for (const option of suggestionOptions) {
+        //     // Get the text content of the option
+        //     const optionText = await option.getText();
+        //     console.log('Option text:', optionText);
+        //
+        //     // Normalize the option text for comparison
+        //     const normalizedOptionText = optionText.trim().toLowerCase();
+        //
+        //     // Check for exact match or more precise matching logic
+        //     if (normalizedOptionText === normalizedLocation) {
+        //         console.log(`Clicking on the option: ${optionText}`);
+        //         await option.click();
+        //         found = true;
+        //         break;
+        //     }
+        // }
+        //
+        // if (!found) {
+        //     throw new Error(`Location "${location}" not found in suggestions`);
+        // } else {
+        //     console.log(`Location "${location}" was selected.`);
+        // }
 
         // Optional: Wait for the location to be filled in the input field
         const filledLocation = await locationInput.getAttribute('value');
@@ -49,7 +99,6 @@ export class HomePage {
 
         // Wait until the button is visible
         await this.driver.wait(until.elementIsVisible(filtersButton), 10000);
-        console.log('"Filters" button is visible.');
 
         // Wait until the button is enabled and not busy
         await this.driver.wait(async () => {
@@ -57,11 +106,6 @@ export class HomePage {
             const isDisabled = await filtersButton.getAttribute('disabled');
             return (ariaBusy === null || ariaBusy === 'false') && !isDisabled;
         }, 10000, '"Filters" button is still busy or disabled.');
-        console.log('"Filters" button is enabled and not busy.');
-
-        // Retrieve outerHTML using JavaScript for debugging
-        const outerHtml = await this.driver.executeScript("return arguments[0].outerHTML;", filtersButton);
-        console.log('Filters Button OuterHTML:', outerHtml);
 
         console.log('Clicking on "Filters" button...');
         await filtersButton.click();
@@ -81,6 +125,11 @@ export class HomePage {
         const increaseBedroomsButtonLocator = By.css('[data-testid="stepper-filter-item-min_bedrooms-stepper-increase-button"]');
         await this.driver.wait(until.elementLocated(increaseBedroomsButtonLocator), 10000);
         const increaseButton = await this.driver.findElement(increaseBedroomsButtonLocator);
+
+        // Get the current number of bedrooms
+        // const valueElement = await this.driver.findElement(
+        //     By.css('[data-testid="filterItem-roomsAndBeds-stepper-min_bedrooms-0"]')
+        // );
 
         let currentValue = 0;
         // Increase the number of bedrooms to the desired amount
@@ -219,6 +268,20 @@ export class HomePage {
         await dateElement.click();
     }
 
+    private async navigateToMonth(targetDate: string) {
+        const targetMonthYear = new Date(targetDate).toLocaleString('default', { month: 'long', year: 'numeric' });
+        let currentMonthYearElement = await this.driver.findElement(By.css('div._12fun97'));
+        let currentMonthYear = await currentMonthYearElement.getText();
+
+        while (currentMonthYear !== targetMonthYear) {
+            const nextButton = await this.driver.findElement(By.css('button[aria-label="Next"]'));
+            await nextButton.click();
+            await this.driver.sleep(500); // Wait for the calendar to update
+            currentMonthYearElement = await this.driver.findElement(By.css('div._12fun97'));
+            currentMonthYear = await currentMonthYearElement.getText();
+        }
+    }
+
     async selectDates(checkInDaysAhead: number, checkOutDaysAhead: number) {
         console.log('Closing overlays if any...');
         await this.closeOverlays();
@@ -303,10 +366,169 @@ export class HomePage {
         console.log('Search button clicked.');
     }
 
+    /**
+     * Retrieves the minimum number of bedrooms from the stepper on the search page.
+     * @returns The number of bedrooms as an integer.
+     */
+    async getMinimumBedroomsFromSearchPage(): Promise<number> {
+        const valueElementLocator = By.css('[data-testid="stepper-filter-item-min_bedrooms-stepper-value"]');
+
+        // Wait until the element is located and visible
+        const valueElement = await this.driver.wait(
+            until.elementLocated(valueElementLocator),
+            10000,
+            'Bedrooms value element not found within 10 seconds.'
+        );
+
+        await this.driver.wait(
+            until.elementIsVisible(valueElement),
+            10000,
+            'Bedrooms value element is not visible.'
+        );
+
+        // Wait until the text contains at least one digit
+        await this.driver.wait(async () => {
+            const text = await valueElement.getText();
+            return /\d/.test(text); // Ensures the text contains at least one digit
+        }, 10000, 'Bedrooms value text with a number did not appear within 10 seconds.');
+
+        // Retrieve the text
+        const bedroomsText = await valueElement.getText();
+        console.log('Retrieved bedrooms text:', bedroomsText);
+
+        // Use regex to extract the first number from the text
+        const bedroomsMatch = bedroomsText.match(/(\d+)/);
+        let bedroomsCount = 0;
+
+        if (bedroomsMatch && bedroomsMatch[1]) {
+            bedroomsCount = parseInt(bedroomsMatch[1], 10);
+        } else {
+            throw new Error(`Unable to parse bedrooms count from text: "${bedroomsText}"`);
+        }
+
+        console.log('Parsed bedrooms count from search page:', bedroomsCount);
+        return bedroomsCount;
+    }
+
+    /**
+     * Extracts the number of bedrooms from a given property card on the search results page.
+     * @param card The WebElement representing the property card.
+     * @returns The number of bedrooms as an integer.
+     */
+    async extractBedroomsCountFromCard(card: WebElement): Promise<number> {
+        try {
+            // Locate the ordered list within the property card
+            const detailsList = await card.findElement(By.css('ol'));
+            const listItems = await detailsList.findElements(By.css('li'));
+
+            // Iterate through the list items to find the one containing 'bedroom'
+            for (const item of listItems) {
+                const text = await item.getText();
+                if (/bedroom/i.test(text)) {
+                    console.log(`Found bedrooms text: "${text}"`);
+
+                    // Use regex to extract the number
+                    const match = text.match(/(\d+)\s*bedroom/i);
+                    if (match && match[1]) {
+                        const bedroomsCount = parseInt(match[1], 10);
+                        console.log(`Extracted bedrooms count: ${bedroomsCount}`);
+                        return bedroomsCount;
+                    } else {
+                        throw new Error(`Unable to parse bedrooms count from text: "${text}"`);
+                    }
+                }
+            }
+
+            throw new Error('Bedrooms information not found in the property card.');
+        } catch (error) {
+            console.error(`Error extracting bedrooms count: ${error}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Extracts the number of bedrooms from the Property Details Page.
+     * @returns The number of bedrooms as an integer.
+     */
+    async extractBedroomsCountFromDetailsPage(): Promise<number> {
+        try {
+            // Locate the ordered list within the property details
+            const detailsList = await this.driver.findElement(By.css('ol'));
+            const listItems = await detailsList.findElements(By.css('li'));
+
+            // Iterate through the list items to find the one containing 'bedroom'
+            for (const item of listItems) {
+                const text = await item.getText();
+                if (/bedroom/i.test(text)) {
+                    console.log(`Found bedrooms text on details page: "${text}"`);
+
+                    // Use regex to extract the number
+                    const match = text.match(/(\d+)\s*bedroom/i);
+                    if (match && match[1]) {
+                        const bedroomsCount = parseInt(match[1], 10);
+                        console.log(`Extracted bedrooms count from details page: ${bedroomsCount}`);
+                        return bedroomsCount;
+                    } else {
+                        throw new Error(`Unable to parse bedrooms count from text: "${text}"`);
+                    }
+                }
+            }
+
+            throw new Error('Bedrooms information not found in the property details.');
+        } catch (error) {
+            console.error(`Error extracting bedrooms count from details page: ${error}`);
+            throw error;
+        }
+    }
+
+// Function to extract bedrooms count
+    async extractBedroomsCount(driver: WebDriver): Promise<number> {
+        try {
+            // 1. Locate the parent div using data-section-id
+            const parentDiv: WebElement = await driver.findElement(By.css('div[data-section-id="OVERVIEW_DEFAULT_V2"]'));
+            console.log('Parent div found.');
+
+            // 2. Within the parent div, find all <li> elements inside <ol>
+            const listItems: WebElement[] = await parentDiv.findElements(By.css('ol > li'));
+            console.log(`Found ${listItems.length} list items.`);
+
+            // 3. Iterate through each <li> to find the one containing 'bedrooms'
+            for (const [index, item] of listItems.entries()) {
+                const text = await item.getText();
+                console.log(`List item ${index + 1}: "${text}"`);
+
+                // Check if the text includes 'bedrooms' (case-insensitive)
+                if (text.toLowerCase().includes('bedrooms')) {
+                    console.log(`'bedrooms' found in list item ${index + 1}.`);
+
+                    // Use regex to extract the number preceding 'bedrooms'
+                    const match = text.match(/(\d+)\s*bedroom/i);
+                    if (match && match[1]) {
+                        const bedroomsCount = parseInt(match[1], 10);
+                        console.log(`Extracted bedrooms count: ${bedroomsCount}`);
+                        return bedroomsCount;
+                    } else {
+                        throw new Error(`Unable to parse bedrooms count from text: "${text}"`);
+                    }
+                }
+            }
+
+            // If 'bedrooms' is not found in any <li>
+            throw new Error('Bedrooms information not found in any list items.');
+
+        } catch (error) {
+            console.error(`Error extracting bedrooms count: ${error}`);
+            throw error; // Rethrow the error to be handled by the calling function
+        }
+
+
+
+    }
+
     async clickClearAll() {
         console.log('Clicking "Clear all" button...');
 
-        // Wait for the footer element where CLear all buton is to appear
+        // Wait for the footer element to appear (assuming the "Clear all" button is in the footer or the filters modal)
         const footer = await this.driver.findElement(By.tagName('footer'));
 
         // Find the anchor or button that contains "Clear all" text inside the footer
@@ -316,6 +538,54 @@ export class HomePage {
         await clearAllButton.click();
         console.log('Clicked the "Clear all" button.');
     }
+
+    async collectPropertyUrls(propertiesToCheck: WebElement[]) {
+        const propertyUrls = [];
+        for (const card of propertiesToCheck) {
+            try {
+                const linkElement = await card.findElement(By.css('a'));
+                const href = await linkElement.getAttribute('href');
+                let propertyUrl = href;
+                if (!href.startsWith('http')) {
+                    propertyUrl = `https://www.airbnb.com${href}`;
+                }
+
+                propertyUrls.push(propertyUrl);
+            } catch (error) {
+                console.log('Unable to retrieve property URL.', error);
+                continue;
+            }
+        }
+
+        return propertyUrls;
+    }
+
+    async extractBedroomsFromCard(card: WebElement) {
+        try {
+            const subtitleLocator = By.css('[data-testid="listing-card-subtitle"]');
+            const subtitles = await card.findElements(subtitleLocator);
+
+            if (subtitles.length < 2) {
+                throw new Error('Not enough subtitle elements to determine bedrooms.');
+            }
+
+            const bedroomsSubtitle = subtitles[1];
+            const bedroomsText = await bedroomsSubtitle.getText();
+            console.log(`Bedrooms text: "${bedroomsText}"`);
+
+            const bedroomsMatch = bedroomsText.match(/(\d+)\s+bedroom(s)?/i);
+
+            if (bedroomsMatch) {
+                return parseInt(bedroomsMatch[1], 10);
+            }
+
+            return null; // Unable to determine bedrooms from the card
+        } catch (error) {
+            console.error('Error extracting bedrooms from card:', error);
+            return null;
+        }
+    }
+
 }
 
 
