@@ -171,6 +171,36 @@ When('I apply additional filters:', {timeout: 120000}, async function (dataTable
     const data = dataTable.rowsHash();
     console.log('Applying additional filters:', data);
 
+    // Save filter data in context for later use
+    if (data['Bedrooms']) {
+        this.bedrooms = parseInt(data['Bedrooms'], 10);
+    }
+    if (data['Amenities']) {
+        this.amenities = data['Amenities'].split(',').map((a: string) => a.trim());
+    }
+
+    // Open the filters modal
+    await homePage.openFilters();
+
+    // Set the number of bedrooms
+    if (this.bedrooms) {
+        await homePage.setBedrooms(this.bedrooms);
+    }
+
+    // Select amenities
+    if (this.amenities) {
+        await homePage.selectAmenities(this.amenities);
+    }
+
+    // Click "Show Stays"
+    await homePage.clickShowStays();
+});
+
+
+When('I apply additional filters former', {timeout: 120000}, async function (dataTable) {
+    const data = dataTable.rowsHash();
+    console.log('Applying additional filters:', data);
+
     // Open the filters modal
     await homePage.openFilters();
 
@@ -189,6 +219,64 @@ When('I apply additional filters:', {timeout: 120000}, async function (dataTable
     // Click "Show Stays"
     await homePage.clickShowStays();
 });
+
+Then('all results on the first page have at least the specified number of bedrooms', {timeout: 130000}, async function () {
+    const minBedrooms = this.bedrooms;  // Retrieve the saved bedrooms from context
+    console.log(`\nVerifying that all properties on the first page have at least ${minBedrooms} bedrooms...`);
+
+    await driver.wait(async function () {
+        const elements = await driver.findElements(By.css('[data-testid="card-container"]'));
+        return elements.length >= 2;  // Wait until at least 2 elements are located
+    }, 20000);  // Wait for up to 20 seconds
+
+    // Wait for property cards to be present
+    const propertyCardLocator = By.css('[data-testid="card-container"]');
+    await driver.wait(until.elementsLocated(propertyCardLocator), 20000, 'Property cards did not load in time.');
+
+    // Retrieve all property cards
+    const propertyCards = await driver.findElements(propertyCardLocator);
+    console.log(`Found ${propertyCards.length} property cards on the first page.`);
+
+    const originalWindow = await driver.getWindowHandle();
+    // Iterate through each property card
+    for (let i = 0; i < propertyCards.length; i++) {
+        try {
+            const propertyCardsUpdated = await driver.findElements(By.css('[data-testid="card-container"]'));
+            const card = propertyCardsUpdated[i];
+            console.log(`\nProcessing property ${i + 1} of ${propertyCards.length}...`);
+
+            let bedroomsCount = await homePage.extractBedroomsFromCard(card);
+
+            if (bedroomsCount !== null) {
+                console.log(`Property ${i + 1} has ${bedroomsCount} bedrooms.`);
+                expect(
+                    bedroomsCount,
+                    `Property ${i + 1} has fewer bedrooms than the required ${minBedrooms}.`
+                ).to.be.at.least(minBedrooms);
+            } else {
+                console.log(`Unable to determine the number of bedrooms for property ${i + 1} from the card. Checking details page...`);
+                bedroomsCount = await placeDetailsPage.extractBedroomsFromDetailsPage(card, originalWindow);
+
+                if (bedroomsCount !== null) {
+                    console.log(`Property ${i + 1} has ${bedroomsCount} bedrooms (from details page).`);
+                    expect(
+                        bedroomsCount,
+                        `Property ${i + 1} has fewer bedrooms than the required ${minBedrooms}.`
+                    ).to.be.at.least(minBedrooms);
+                } else {
+                    console.log(`Unable to determine bedroom capacity for property ${i + 1}.`);
+                    throw new Error(`Unable to determine bedroom capacity for property ${i + 1}.`);
+                }
+            }
+        } catch (error) {
+            console.error(`Error processing property ${i + 1}:`, error);
+            throw error;
+        }
+    }
+
+    console.log(`\nAll properties on the first page have at least ${minBedrooms} bedrooms.`);
+});
+
 
 Then('all results on the first page have at least {int} bedrooms', {timeout: 130000}, async function (minBedrooms: number) {
     console.log(`\nVerifying that all properties on the first page have at least ${minBedrooms} bedrooms...`);
