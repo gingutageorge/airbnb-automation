@@ -4,9 +4,11 @@ import {Builder, By, until, WebDriver} from 'selenium-webdriver';
 import {Given, When, Then, BeforeAll, AfterAll} from '@cucumber/cucumber';
 import {expect} from 'chai';
 import {HomePage} from '../pages/homePage';
+import {PlaceDetailsPage} from '../pages/placeDetailsPage';
 
 let driver: WebDriver;
 let homePage: HomePage;
+let placeDetailsPage: PlaceDetailsPage;
 
 BeforeAll(async () => {
     driver = await new Builder()
@@ -20,6 +22,7 @@ BeforeAll(async () => {
     await driver.manage().setTimeouts({pageLoad: 60000});
 
     homePage = new HomePage(driver);
+    placeDetailsPage = new PlaceDetailsPage(driver);
 });
 
 
@@ -38,44 +41,46 @@ Given('I open Airbnb homepage', {timeout: 10000}, async () => {
     // Add a short delay to ensure the page has loaded
     await driver.sleep(2000); // Wait for 2 seconds
 
-    // Now locate and wait for the location input field
-    const locationInputLocator = By.css('input[data-testid="structured-search-input-field-query"]');
-    const locationInput = await driver.wait(until.elementLocated(locationInputLocator), 20000);
-    await driver.wait(until.elementIsVisible(locationInput), 20000);
-
-    console.log('Current URL:', await driver.getCurrentUrl());
-    console.log('Page Title:', await driver.getTitle());
 });
 
 When('I search for properties in {string} with the following details:', {timeout: 60 * 1000}, async function (location: string, dataTable) {
-    const dataRows = dataTable.hashes();
-    const data = dataRows[0];
+        const dataRows = dataTable.hashes();
+        const data = dataRows[0];
 
-    console.log('Location:', location);
-    console.log('Check-In:', data['Check-In']);
-    console.log('Check-Out:', data['Check-Out']);
-    console.log('Adults:', data['Adults']);
-    console.log('Children:', data['Children']);
+        console.log('Location:', location);
+        console.log('Check-In:', data['Check-In']);
+        console.log('Check-Out:', data['Check-Out']);
+        console.log('Adults:', data['Adults']);
+        console.log('Children:', data['Children']);
 
-    // Enter the location
-    await homePage.enterLocation(location);
+    this.context = {
+        adults: parseInt(data['Adults'], 10),
+        children: parseInt(data['Children'], 10),
+        totalGuests: parseInt(data['Adults'], 10) + parseInt(data['Children'], 10),
+    };
 
-    // Parse days ahead
-    const checkInDays = data['Check-In'] === 'one week ahead' ? 7 : 0;
-    const checkOutDays = data['Check-Out'] === 'two weeks ahead' ? 14 : 0;
+        // Enter the location
+        await homePage.enterLocation(location);
 
-    // Select dates
-    await homePage.selectDates(checkInDays, checkOutDays);
+        // Parse days ahead
+        const checkInDays = data['Check-In'] === 'one week ahead' ? 7 : 0;
+        const checkOutDays = data['Check-Out'] === 'two weeks ahead' ? 14 : 0;
 
-    // Parse guests
-    const adults = parseInt(data['Adults'], 10);
-    const children = parseInt(data['Children'], 10);
+        // Select dates
+        await homePage.selectDates(checkInDays, checkOutDays);
 
-    // Select guests
-    await homePage.selectGuests(adults, children);
+        // Parse guests
+        // const adults = parseInt(data['Adults'], 10);
+        const adults = this.context.adults;
+        const children = this.context.children;
+        // const children = parseInt(data['Children'], 10)
+        ;
 
-    // Click search
-    await homePage.clickSearch();
+        // Select guests
+        await homePage.selectGuests(adults, children);
+
+        // Click search
+        await homePage.clickSearch();
     }
 );
 
@@ -113,11 +118,13 @@ Then('I should see the correct search filters applied', async function () {
     checkOutDate.setDate(checkOutDate.getDate() + 14);
 });
 
-Then('I should see properties accommodating at least {int} guests', {timeout: 120000}, async function (minGuests: number) {
+Then('I should see properties accommodating at least the total number of guests', {timeout: 130000}, async function () {
+    const totalGuests = this.context.totalGuests;
+
     // Wait for at least 2 property cards to load
     await driver.wait(async function () {
         const elements = await driver.findElements(By.css('[data-testid="card-container"]'));
-        return elements.length >= 2;  // Adjust if needed
+        return elements.length >= 2;
     }, 20000);
 
     // Find all property cards
@@ -127,119 +134,70 @@ Then('I should see properties accommodating at least {int} guests', {timeout: 12
     // Limit the number of properties to check
     const maxPropertiesToCheck = 18; // Adjust as needed
     const propertiesToCheck = propertyCards.slice(0, maxPropertiesToCheck);
-
-    // Collect property URLs
-    const propertyUrls = [];
-    for (const card of propertiesToCheck) {
-        try {
-            const linkElement = await card.findElement(By.css('a'));
-            const href = await linkElement.getAttribute('href');
-            //console.log(`Raw href: ${href}`);
-
-            let propertyUrl = href;
-            if (!href.startsWith('http')) {
-                // If href is a relative path, prepend the domain
-                propertyUrl = `https://www.airbnb.com${href}`;
-            }
-
-            console.log(`Collected property URL: ${propertyUrl}`);
-            propertyUrls.push(propertyUrl);
-        } catch (error) {
-            console.log('Unable to retrieve property URL.', error);
-            continue;
-        }
-    }
-
-    // Open each property in a new tab and check capacity
+    const propertyUrls = await homePage.collectPropertyUrls(propertiesToCheck);
     const originalWindow = await driver.getWindowHandle();
 
     for (let i = 0; i < propertyUrls.length; i++) {
         await new Promise(resolve => setTimeout(resolve, 250));  // Wait 2 seconds between requests
         const url = propertyUrls[i];
-        console.log("---");
-        console.log(`Processing property ${i + 1}: ${url}`);
+        console.log(`\nProcessing property ${i + 1}: ${url}`);
 
         try {
-            // Open a new tab
-            await driver.switchTo().newWindow('tab');
-            await driver.get(url);
+            await homePage.openNewTabAndNavigate(url);
+            await placeDetailsPage.waitForBodyToLoad();
+            await placeDetailsPage.closeTranslationOverlayIfNeeded();
 
-            console.log("waiting for body to load");
-            // Wait for the property details page to load
-            await driver.wait(until.elementLocated(By.css('body')), 10000);
-            console.log("body loaded");
-            // Wait for the modal to appear (if present)
-            try {
-                // Wait for the modal to be present (adjust the timeout as needed)
-                const modal = await driver.wait(until.elementLocated(By.css('[role="dialog"][aria-label="Translation on"]')), 5000);
+            const overviewSection = await placeDetailsPage.getOverviewSection();
+            const capacityText = await placeDetailsPage.getGuestCapacityText(overviewSection);
+            const maxGuests = placeDetailsPage.parseMaxGuests(capacityText);
 
-                // If the modal is found, attempt to close it
-                if (modal) {
-                    console.log("Modal is displayed. Attempting to close it...");
-
-                    // Find and click the close button
-                    const closeButton = await modal.findElement(By.css('button[aria-label="Close"]'));
-                    await closeButton.click();
-
-                    console.log("Modal closed successfully.");
-                }
-            } catch (error) {
-                // If the modal isn't found within the timeout, handle it gracefully
-                console.log("No modal displayed or unable to locate the modal. Continuing with the test...");
-            }
-
-            // Locate the container with data-section-id="OVERVIEW_DEFAULT_V2"
-            await driver.wait(until.elementLocated(By.css('[data-section-id="OVERVIEW_DEFAULT_V2"]')), 10000);
-            let overviewSection;
-            try {
-                overviewSection = await driver.findElement(By.css('[data-section-id="OVERVIEW_DEFAULT_V2"]'));
-            } catch (error) {
-                console.log('Overview section not found.');
-                continue; // Skip to the next property
-            }
-
-            // Locate the <li> element inside the overview section that contains guest information
-            let capacityText = '';
-            try {
-                const guestInfoElement = await overviewSection.findElement(By.xpath(".//li[contains(text(), 'guests')]"));
-                capacityText = await guestInfoElement.getText();
-            } catch (error) {
-                console.log('Guest information not found in this property.');
-                continue; // Skip to the next property
-            }
-
-            console.log('Capacity text:', capacityText);
-
-            // Parse the number of guests from the capacity text
-            const guestsMatch = capacityText.match(/(\d+)\s+guests?/i);
-            if (guestsMatch) {
-                const maxGuests = parseInt(guestsMatch[1], 10);
-                console.log(`Property accommodates ${maxGuests} guests.`);
-
-                // Verify that the property accommodates at least minGuests
-                if (maxGuests >= minGuests) {
-                    console.log(`Property meets the requirement of at least ${minGuests} guests.`);
-                } else {
-                    console.log(`Property does not meet the requirement of at least ${minGuests} guests.`);
-                }
+            if (maxGuests !== null) {
+                placeDetailsPage.verifyMinGuests(maxGuests, totalGuests); // Compare with totalGuests from context
             } else {
                 console.log('Unable to determine guest capacity for this property.');
             }
 
-            // Close the current tab and switch back to the original tab
-            await driver.close();
-            await driver.switchTo().window(originalWindow);
+            await placeDetailsPage.closeCurrentTab(originalWindow);
 
         } catch (error) {
             console.error(`Error processing property ${i + 1}:`, error);
-            await driver.close();  // Close tab if an error occurs
-            await driver.switchTo().window(originalWindow);
+            await placeDetailsPage.closeCurrentTab(originalWindow);
             continue;
         }
     }
 });
 
 When('I apply additional filters:', {timeout: 120000}, async function (dataTable) {
+    const data = dataTable.rowsHash();
+    console.log('Applying additional filters:', data);
+
+    // Save filter data in context for later use
+    if (data['Bedrooms']) {
+        this.bedrooms = parseInt(data['Bedrooms'], 10);
+    }
+    if (data['Amenities']) {
+        this.amenities = data['Amenities'].split(',').map((a: string) => a.trim());
+    }
+
+    // Open the filters modal
+    await homePage.openFilters();
+
+    // Set the number of bedrooms
+    if (this.bedrooms) {
+        await homePage.setBedrooms(this.bedrooms);
+    }
+
+    // Select amenities
+    if (this.amenities) {
+        await homePage.selectAmenities(this.amenities);
+    }
+
+    // Click "Show Stays"
+    await homePage.clickShowStays();
+});
+
+
+When('I apply additional filters former', {timeout: 120000}, async function (dataTable) {
     const data = dataTable.rowsHash();
     console.log('Applying additional filters:', data);
 
@@ -262,96 +220,65 @@ When('I apply additional filters:', {timeout: 120000}, async function (dataTable
     await homePage.clickShowStays();
 });
 
-Then('I should see properties with at least {int} bedrooms and a pool', {timeout: 120000}, async function (minBedrooms: number) {
-    // Wait for the property cards to load
-    await driver.wait(until.elementsLocated(By.css('div[itemprop="itemListElement"]')), 20000);
+Then('all results on the first page have at least the specified number of bedrooms', {timeout: 130000}, async function () {
+    const minBedrooms = this.bedrooms;  // Retrieve the saved bedrooms from context
+    console.log(`\nVerifying that all properties on the first page have at least ${minBedrooms} bedrooms...`);
 
-    // Find all property cards
-    const propertyCards = await driver.findElements(By.css('div[itemprop="itemListElement"]'));
-    console.log(`Found ${propertyCards.length} property cards.`);
+    await driver.wait(async function () {
+        const elements = await driver.findElements(By.css('[data-testid="card-container"]'));
+        return elements.length >= 2;  // Wait until at least 2 elements are located
+    }, 20000);  // Wait for up to 20 seconds
 
-    // Limit the number of properties to check
-    const maxPropertiesToCheck = 5; // Adjust as needed
-    const propertiesToCheck = propertyCards.slice(0, maxPropertiesToCheck);
+    // Wait for property cards to be present
+    const propertyCardLocator = By.css('[data-testid="card-container"]');
+    await driver.wait(until.elementsLocated(propertyCardLocator), 20000, 'Property cards did not load in time.');
 
-    // Collect property URLs
-    const propertyUrls = [];
-    for (const card of propertiesToCheck) {
+    // Retrieve all property cards
+    const propertyCards = await driver.findElements(propertyCardLocator);
+    console.log(`Found ${propertyCards.length} property cards on the first page.`);
+
+    const originalWindow = await driver.getWindowHandle();
+    // Iterate through each property card
+    for (let i = 0; i < propertyCards.length; i++) {
         try {
-            const linkElement = await card.findElement(By.css('a'));
-            const href = await linkElement.getAttribute('href');
-            let propertyUrl = href.startsWith('http') ? href : `https://www.airbnb.com${href}`;
-            propertyUrls.push(propertyUrl);
-        } catch (error) {
-            console.log('Unable to retrieve property URL.');
-            continue;
-        }
-    }
+            const propertyCardsUpdated = await driver.findElements(By.css('[data-testid="card-container"]'));
+            const card = propertyCardsUpdated[i];
+            console.log(`\nProcessing property ${i + 1} of ${propertyCards.length}...`);
 
-    // Iterate over each property URL
-    for (let i = 0; i < propertyUrls.length; i++) {
-        const url = propertyUrls[i];
-        console.log(`Processing property ${i + 1}: ${url}`);
+            let bedroomsCount = await homePage.extractBedroomsFromCard(card);
 
-        try {
-            // Navigate to the property details page
-            await driver.get(url);
-
-            // Wait for the property details page to load
-            await driver.wait(until.elementLocated(By.css('body')), 10000);
-
-            // Verify the number of bedrooms
-            let bedroomsText = '';
-            try {
-                const bedroomsElement = await driver.findElement(By.xpath("//*[contains(text(), 'bedroom')]"));
-                bedroomsText = await bedroomsElement.getText();
-            } catch (error) {
-                console.log('Bedrooms information not found in this property.');
-                continue; // Skip to the next property
-            }
-
-            console.log('Bedrooms text:', bedroomsText);
-
-            // Parse the number of bedrooms
-            const bedroomsMatch = bedroomsText.match(/(\d+)\s+bedrooms?/i);
-            let bedroomsCount = 0;
-            if (bedroomsMatch) {
-                bedroomsCount = parseInt(bedroomsMatch[1], 10);
+            if (bedroomsCount !== null) {
+                console.log(`Property ${i + 1} has ${bedroomsCount} bedrooms.`);
+                expect(
+                    bedroomsCount,
+                    `Property ${i + 1} has fewer bedrooms than the required ${minBedrooms}.`
+                ).to.be.at.least(minBedrooms);
             } else {
-                // Handle singular 'bedroom'
-                if (/1\s+bedroom/i.test(bedroomsText)) {
-                    bedroomsCount = 1;
+                console.log(`Unable to determine the number of bedrooms for property ${i + 1} from the card. Checking details page...`);
+                bedroomsCount = await placeDetailsPage.extractBedroomsFromDetailsPage(card, originalWindow);
+
+                if (bedroomsCount !== null) {
+                    console.log(`Property ${i + 1} has ${bedroomsCount} bedrooms (from details page).`);
+                    expect(
+                        bedroomsCount,
+                        `Property ${i + 1} has fewer bedrooms than the required ${minBedrooms}.`
+                    ).to.be.at.least(minBedrooms);
                 } else {
-                    console.log('Unable to determine number of bedrooms for this property.');
-                    continue;
+                    console.log(`Unable to determine bedroom capacity for property ${i + 1}.`);
+                    throw new Error(`Unable to determine bedroom capacity for property ${i + 1}.`);
                 }
             }
-
-            console.log(`Property has ${bedroomsCount} bedrooms.`);
-
-            // Verify that the property has at least minBedrooms
-            expect(bedroomsCount).to.be.at.least(minBedrooms);
-
-            // Verify that the property includes a pool
-            let hasPool = false;
-            try {
-                const poolElement = await driver.findElement(By.xpath("//*[contains(text(), 'Pool')]"));
-                hasPool = true;
-            } catch (error) {
-                hasPool = false;
-            }
-
-            console.log(`Property has pool: ${hasPool}`);
-            expect(hasPool).to.be.true;
-
         } catch (error) {
             console.error(`Error processing property ${i + 1}:`, error);
-            continue; // Proceed to the next property
+            throw error;
         }
     }
+
+    console.log(`\nAll properties on the first page have at least ${minBedrooms} bedrooms.`);
 });
 
-Then('all results on the first page have at least {int} bedrooms', {timeout: 120000}, async function (minBedrooms: number) {
+
+Then('all results on the first page have at least {int} bedrooms', {timeout: 130000}, async function (minBedrooms: number) {
     console.log(`\nVerifying that all properties on the first page have at least ${minBedrooms} bedrooms...`);
     await driver.wait(async function () {
         const elements = await driver.findElements(By.css('[data-testid="card-container"]'));
@@ -368,144 +295,37 @@ Then('all results on the first page have at least {int} bedrooms', {timeout: 120
     const originalWindow = await driver.getWindowHandle();
     // Iterate through each property card
     for (let i = 0; i < propertyCards.length; i++) {
-        // Re-fetch the property card to avoid stale element reference
-        const propertyCardsUpdated = await driver.findElements(By.css('[data-testid="card-container"]'));
-        const card = propertyCardsUpdated[i];
-        console.log(`\nProcessing property ${i + 1} of ${propertyCards.length}...`);
-
         try {
-            // Locate the subtitle elements within the card
-            const subtitleLocator = By.css('[data-testid="listing-card-subtitle"]');
-            const subtitles = await card.findElements(subtitleLocator);
+            // Re-fetch the property cards to avoid stale element references
+            const propertyCardsUpdated = await driver.findElements(By.css('[data-testid="card-container"]'));
+            const card = propertyCardsUpdated[i];
+            console.log(`\nProcessing property ${i + 1} of ${propertyCards.length}...`);
 
-            if (subtitles.length < 2) {
-                throw new Error(`Property ${i + 1} does not have enough subtitle elements to determine bedrooms.`);
-            }
+            let bedroomsCount = await homePage.extractBedroomsFromCard(card);
 
-            // Assuming the second subtitle contains the bedroom information
-            const bedroomsSubtitle = subtitles[1];
-            const bedroomsText = await bedroomsSubtitle.getText();
-            console.log(`Bedrooms text: "${bedroomsText}"`);
-
-            // Extract the number of bedrooms using regex
-            const bedroomsMatch = bedroomsText.match(/(\d+)\s+bedrooms/i);
-            let bedroomsCount = 0;
-
-            if (bedroomsMatch) {
-                bedroomsCount = parseInt(bedroomsMatch[1], 10);
+            if (bedroomsCount !== null) {
                 console.log(`Property ${i + 1} has ${bedroomsCount} bedrooms.`);
-
-                // Assert that the property meets the minimum bedroom requirement
-                expect(bedroomsCount, `Property ${i + 1} has fewer bedrooms than the required ${minBedrooms}.`).to.be.at.least(minBedrooms);
-            } else if (/1\s+bedroom/i.test(bedroomsText)) {
-                bedroomsCount = 1;
-                console.log(`Property ${i + 1} has ${bedroomsCount} bedrooms.`);
-
-                // Assert that the property meets the minimum bedroom requirement
-                expect(bedroomsCount, `Property ${i + 1} has fewer bedrooms than the required ${minBedrooms}.`).to.be.at.least(minBedrooms);
+                expect(
+                    bedroomsCount,
+                    `Property ${i + 1} has fewer bedrooms than the required ${minBedrooms}.`
+                ).to.be.at.least(minBedrooms);
             } else {
-                console.log(`Unable to determine the number of bedrooms for property ${i + 1}.`);
-                //
-                //
-                try {
-                    let propertyUrl = "";
-                    try {
-                        const linkElement = await card.findElement(By.css('a'));
-                        const href = await linkElement.getAttribute('href');
+                console.log(`Unable to determine the number of bedrooms for property ${i + 1} from the card. Checking details page...`);
+                bedroomsCount = await placeDetailsPage.extractBedroomsFromDetailsPage(card, originalWindow);
 
-                        if (!href.startsWith('http')) {
-                            propertyUrl = `https://www.airbnb.com${href}`;
-                        } else {
-                            propertyUrl = href;
-                        }
-                        console.log(`Collected property URL: ${propertyUrl}`);
-                    } catch (error) {
-                        console.log('Unable to retrieve property URL.', error);
-                        continue;
-                    }
-                    propertyUrl = encodeURI(propertyUrl);
-                    // Open a new tab
-                    await driver.switchTo().newWindow('tab');
-                    await driver.sleep(1000);
-                    await driver.get(propertyUrl);
-
-                    console.log("waiting for body to load");
-                    // Wait for the property details page to load
-                    await driver.wait(until.elementLocated(By.css('body')), 10000);
-                    console.log("body loaded");
-                    // Wait for the modal to appear (if present)
-                    try {
-                        // Wait for the modal to be present (adjust the timeout as needed)
-                        const modal = await driver.wait(until.elementLocated(By.css('[role="dialog"][aria-label="Translation on"]')), 5000);
-
-                        // If the modal is found, attempt to close it
-                        if (modal) {
-                            console.log("Modal is displayed. Attempting to close it...");
-
-                            // Find and click the close button
-                            const closeButton = await modal.findElement(By.css('button[aria-label="Close"]'));
-                            await closeButton.click();
-
-                            console.log("Modal closed successfully.");
-                        }
-                    } catch (error) {
-                        // If the modal isn't found within the timeout, handle it gracefully
-                        console.log("No modal displayed or unable to locate the modal. Continuing with the test...");
-                    }
-
-                    // Locate the container with data-section-id="OVERVIEW_DEFAULT_V2"
-                    await driver.wait(until.elementLocated(By.css('[data-section-id="OVERVIEW_DEFAULT_V2"]')), 10000);
-                    let overviewSection;
-                    try {
-                        overviewSection = await driver.findElement(By.css('[data-section-id="OVERVIEW_DEFAULT_V2"]'));
-                    } catch (error) {
-                        console.log('Overview section not found.');
-                        continue; // Skip to the next property
-                    }
-                    // Extract bedroom information
-                    let bedroomText = '';
-                    try {
-                        const bedroomElement = await overviewSection.findElement(By.xpath(".//li[contains(text(), 'bedroom')]"));
-                        bedroomText = await bedroomElement.getText();
-
-                        console.log('Numatul de dormiatoare este', bedroomText);
-                    } catch (error) {
-                        console.log(error);
-                        console.log('Bedroom information not found in this property.');
-                        // Navigate back to the search results page
-                        await driver.navigate().back();
-                        await driver.wait(until.urlContains('/s/'), 10000);
-                        continue; // Skip to the next property
-                    }
-
-                    console.log('Bedrooms text:', bedroomText);
-
-                    // Parse the number of bedrooms from the capacity text
-                    const bedroomsMatch = bedroomText.match(/(\d+)\s+bedrooms?/i);
-                    if (bedroomsMatch) {
-                        const maxBedrooms = parseInt(bedroomsMatch[1], 10);
-                        console.log(`Property accommodates ${maxBedrooms} bedrooms.`);
-
-                        // Verify that the property accommodates at least minBedrooms
-                        expect(maxBedrooms).to.be.at.least(minBedrooms);
-                    } else {
-                        console.log('Unable to determine bedroom capacity for this property.');
-                    }
-
-                    // Close the current tab and switch back to the original tab
-                    await driver.close();
-                    await driver.switchTo().window(originalWindow);
-
-                } catch (error) {
-                    console.error(`Error processing property ${i + 1}:`, error);
-                    // Close the current tab and switch back to the original tab
-                    await driver.close();
-                    await driver.switchTo().window(originalWindow);
-                    continue; // Proceed to the next property
+                if (bedroomsCount !== null) {
+                    console.log(`Property ${i + 1} has ${bedroomsCount} bedrooms (from details page).`);
+                    expect(
+                        bedroomsCount,
+                        `Property ${i + 1} has fewer bedrooms than the required ${minBedrooms}.`
+                    ).to.be.at.least(minBedrooms);
+                } else {
+                    console.log(`Unable to determine bedroom capacity for property ${i + 1}.`);
+                    throw new Error(`Unable to determine bedroom capacity for property ${i + 1}.`);
                 }
             }
         } catch (error) {
-            console.error(`Error processing property ${i + 1}: ${error}`);
+            console.error(`Error processing property ${i + 1}:`, error);
             throw error;
         }
     }
@@ -545,39 +365,13 @@ Then(/^first result has pool amenity$/, {timeout: 120000}, async function () {
             } else {
                 propertyUrl = href;
             }
-            console.log(`Collected property URL: ${propertyUrl}`);
         } catch (error) {
             console.log('Unable to retrieve property URL.', error);
         }
         propertyUrl = encodeURI(propertyUrl);
-        // Open a new tab
-        await driver.switchTo().newWindow('tab');
-        await driver.sleep(1000);
-        await driver.get(propertyUrl);
-
-        console.log("waiting for body to load");
-        // Wait for the property details page to load
-        await driver.wait(until.elementLocated(By.css('body')), 10000);
-        console.log("body loaded");
-        // Wait for the modal to appear (if present)
-        try {
-            // Wait for the modal to be present (adjust the timeout as needed)
-            const modal = await driver.wait(until.elementLocated(By.css('[role="dialog"][aria-label="Translation on"]')), 5000);
-
-            // If the modal is found, attempt to close it
-            if (modal) {
-                console.log("Modal is displayed. Attempting to close it...");
-
-                // Find and click the close button
-                const closeButton = await modal.findElement(By.css('button[aria-label="Close"]'));
-                await closeButton.click();
-
-                console.log("Modal closed successfully.");
-            }
-        } catch (error) {
-            // If the modal isn't found within the timeout, handle it gracefully
-            console.log("No modal displayed or unable to locate the modal. Continuing with the test...");
-        }
+        await homePage.openNewTabAndNavigate(propertyUrl);
+        await placeDetailsPage.waitForBodyToLoad();
+        await placeDetailsPage.closeTranslationOverlayIfNeeded();
 
         // Locate the container with data-section-id="AMENITIES_DEFAULT"
         await driver.wait(until.elementLocated(By.css('[data-section-id="AMENITIES_DEFAULT"]')), 20000);
@@ -640,15 +434,11 @@ Then(/^first result has pool amenity$/, {timeout: 120000}, async function () {
             console.log('Amenities section not found.');
         }
 
-        // Close the current tab and switch back to the original tab
-        await driver.close();
-        await driver.switchTo().window(originalWindow);
+        await placeDetailsPage.closeCurrentTab(originalWindow);
 
     } catch (error) {
         console.error(`Error processing property`, error);
-        // Close the current tab and switch back to the original tab
-        await driver.close();
-        await driver.switchTo().window(originalWindow);
+        await placeDetailsPage.closeCurrentTab(originalWindow);
     }
 });
 

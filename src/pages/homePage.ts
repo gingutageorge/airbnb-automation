@@ -1,14 +1,21 @@
+import { BasePage } from './basePage';
 import {By, WebDriver, until, Key, WebElement} from 'selenium-webdriver';
 
-export class HomePage {
-    constructor(private driver: WebDriver) {}
+
+export class HomePage extends BasePage {
+    // Define the constant as a static class property
+    static LOCATION_INPUT_SELECTOR = By.css('input[data-testid="structured-search-input-field-query"]');
+
+    constructor(driver: WebDriver) {
+        super(driver);
+    }
 
     async enterLocation(location: string) {
-        // Locate the location input field using data-testid
         console.log('Locating the location input field...');
-        const locationInput = await this.driver.findElement(
-            By.css('input[data-testid="structured-search-input-field-query"]')
-        );
+
+        // Use the static class property for the selector
+        const locationInput = await this.driver.findElement(HomePage.LOCATION_INPUT_SELECTOR);
+
         await this.driver.wait(until.elementIsVisible(locationInput), 10000);
         console.log('Location input field is visible.');
 
@@ -21,7 +28,6 @@ export class HomePage {
         await locationInput.sendKeys(Key.RETURN);
         console.log('Pressed Enter after entering the location.');
 
-        // Optional: Wait for the location to be filled in the input field
         const filledLocation = await locationInput.getAttribute('value');
         console.log(`Filled location in input field: ${filledLocation}`);
     }
@@ -49,7 +55,6 @@ export class HomePage {
 
         // Wait until the button is visible
         await this.driver.wait(until.elementIsVisible(filtersButton), 10000);
-        console.log('"Filters" button is visible.');
 
         // Wait until the button is enabled and not busy
         await this.driver.wait(async () => {
@@ -57,11 +62,6 @@ export class HomePage {
             const isDisabled = await filtersButton.getAttribute('disabled');
             return (ariaBusy === null || ariaBusy === 'false') && !isDisabled;
         }, 10000, '"Filters" button is still busy or disabled.');
-        console.log('"Filters" button is enabled and not busy.');
-
-        // Retrieve outerHTML using JavaScript for debugging
-        const outerHtml = await this.driver.executeScript("return arguments[0].outerHTML;", filtersButton);
-        console.log('Filters Button OuterHTML:', outerHtml);
 
         console.log('Clicking on "Filters" button...');
         await filtersButton.click();
@@ -191,7 +191,7 @@ export class HomePage {
 
     async clickShowStays() {
         console.log('Clicking "Show stays" button...');
-// Wait for the footer element to appear (this assumes only one footer element exists)
+        // Wait for the footer element to appear
         const footer = await this.driver.findElement(By.tagName('footer'));
 
         const showLinkLocator = By.xpath("//footer//a[contains(text(), 'Show')]");
@@ -202,7 +202,7 @@ export class HomePage {
 
         const showPlacesButton = await footer.findElement(showLinkLocator);
 
-// Click the button
+        // Click the button
         await showPlacesButton.click();
         console.log('Clicked the "Show places" button.');
 
@@ -303,10 +303,10 @@ export class HomePage {
         console.log('Search button clicked.');
     }
 
-    async clickClearAll() {
+     async clickClearAll() {
         console.log('Clicking "Clear all" button...');
 
-        // Wait for the footer element where CLear all buton is to appear
+        // Wait for the footer element to appear (assuming the "Clear all" button is in the footer or the filters modal)
         const footer = await this.driver.findElement(By.tagName('footer'));
 
         // Find the anchor or button that contains "Clear all" text inside the footer
@@ -316,6 +316,54 @@ export class HomePage {
         await clearAllButton.click();
         console.log('Clicked the "Clear all" button.');
     }
+
+    async collectPropertyUrls(propertiesToCheck: WebElement[]) {
+        const propertyUrls = [];
+        for (const card of propertiesToCheck) {
+            try {
+                const linkElement = await card.findElement(By.css('a'));
+                const href = await linkElement.getAttribute('href');
+                let propertyUrl = href;
+                if (!href.startsWith('http')) {
+                    propertyUrl = `https://www.airbnb.com${href}`;
+                }
+
+                propertyUrls.push(propertyUrl);
+            } catch (error) {
+                console.log('Unable to retrieve property URL.', error);
+                continue;
+            }
+        }
+
+        return propertyUrls;
+    }
+
+    async extractBedroomsFromCard(card: WebElement) {
+        try {
+            const subtitleLocator = By.css('[data-testid="listing-card-subtitle"]');
+            const subtitles = await card.findElements(subtitleLocator);
+
+            if (subtitles.length < 2) {
+                throw new Error('Not enough subtitle elements to determine bedrooms.');
+            }
+
+            const bedroomsSubtitle = subtitles[1];
+            const bedroomsText = await bedroomsSubtitle.getText();
+            console.log(`Bedrooms text: "${bedroomsText}"`);
+
+            const bedroomsMatch = bedroomsText.match(/(\d+)\s+bedroom(s)?/i);
+
+            if (bedroomsMatch) {
+                return parseInt(bedroomsMatch[1], 10);
+            }
+
+            return null; // Unable to determine bedrooms from the card
+        } catch (error) {
+            console.error('Error extracting bedrooms from card:', error);
+            return null;
+        }
+    }
+
 }
 
 
