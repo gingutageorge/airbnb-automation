@@ -26,10 +26,10 @@ npm test
 
 **To Do** 
 
-**Error Handling**
+- Better Error Handling
 
-**Docker Integration**
+- Docker Integration
 
-**Reporting**
+- Reporting
 
-Unfortunately I am not fully satisfied with the result, it could have been much more complete given more time. 
+- Improve steps to use the context more
